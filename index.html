@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clickscape</title>
+    <style>
+      * {
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+      }
+      #ph-click-contours-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 999;
+      }
+      #plot {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+      h1 {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        z-index: 1000;
+        color: #fff;
+      }
+      #chart-type {
+        text-decoration: underline;
+        cursor: pointer;
+        pointer-events: auto;
+        user-select: none;
+        -moz-user-select: none;
+        -khtml-user-select: none;
+        -webkit-user-select: none;
+        -o-user-select: none;
+      }
+      #pass-through {
+        pointer-events: none;
+        user-select: none;
+        -moz-user-select: none;
+        -khtml-user-select: none;
+        -webkit-user-select: none;
+        -o-user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>
+        <span id="pass-through">
+          <span id="click-count">0</span> Clicks for the
+        </span>
+        <span id="chart-type">Contours</span>
+      </h1>
+      <div id="ph-click-contours-canvas"></div>
+      <div id="plot"></div>
+    </main>
+    <script type="module">
+      import { playhtml } from "https://unpkg.com/playhtml";
+      import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
+      import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+      let currentData;
+      let chartType = "Contours";
+
+      playhtml.register("ph-click-contours-canvas", {
+        defaultData: { points: [] },
+        onClick: (_event, { setData }) => {
+          setData((draft) => {
+            draft.points.push([_event.clientX, _event.clientY]);
+          });
+        },
+        updateElement: ({ element, data }) => {
+          currentData = data;
+          plotChart(data.points, chartType);
+        },
+      });
+
+      const chartButton = document.getElementById("chart-type");
+
+      chartButton.addEventListener("click", () => {
+        chartType = chartType === "Contours" ? "Histogram" : "Contours";
+        plotChart(currentData.points, chartType);
+      });
+
+      const onResize = () => {
+        if (!currentData) return;
+        plotChart(currentData.points, chartType);
+      };
+
+      window.addEventListener("resize", onResize);
+
+      function plotChart(points, chartType = "Contours") {
+        document.getElementById("click-count").textContent = points.length;
+        chartButton.textContent = chartType;
+
+        const node = document.getElementById("plot");
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        const columns = 100;
+        const rows = Math.max(
+          1,
+          Math.round((screenHeight / screenWidth) * columns),
+        );
+        const values = new Float64Array(columns * rows);
+        for (const [x, y] of points) {
+          const column = Math.floor((x / screenWidth) * columns);
+          const row = Math.floor((y / screenHeight) * rows);
+          if (column < 0 || row < 0 || column >= columns || row >= rows)
+            continue;
+          values[row * columns + column]++;
+        }
+
+        let svg;
+
+        if (chartType === "Contours") {
+          svg = Plot.plot({
+            width: screenWidth,
+            height: screenHeight,
+            margin: 0,
+            axis: false,
+            y: { reverse: true },
+            marks: [
+              Plot.contour(values, {
+                width: columns,
+                height: rows,
+                x1: 0,
+                y1: 0,
+                x2: screenWidth,
+                y2: screenHeight,
+                fill: Plot.identity,
+                stroke: "black",
+                blur: 8,
+                thresholds: 20,
+              }),
+            ],
+          });
+        } else if (chartType === "Histogram") {
+          svg = Plot.plot({
+            width: screenWidth,
+            height: screenHeight,
+            margin: 0,
+            axis: false,
+            marks: [
+              Plot.cell(d3.cross(d3.range(columns), d3.range(rows)), {
+                x: (d) => d[0],
+                y: (d) => d[1],
+                fill: (d) => values[d[1] * columns + d[0]],
+                stroke: "black",
+                blur: 8,
+              }),
+            ],
+          });
+        }
+        node.innerHTML = "";
+        node.appendChild(svg);
+      }
+
+      await playhtml.init();
+    </script>
+  </body>
+</html>
