@@ -75,7 +75,7 @@
         defaultData: { points: [] },
         onClick: (_event, { setData }) => {
           setData((draft) => {
-            draft.points.push([_event.clientX, _event.clientY]);
+            draft.points.push([_event.clientX, _event.clientY, Date.now()]);
           });
         },
         updateElement: ({ element, data }) => {
